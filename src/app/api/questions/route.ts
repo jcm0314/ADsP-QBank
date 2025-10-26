@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { Question } from '@prisma/client'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -20,7 +19,7 @@ export async function GET(req: Request) {
       },
       orderBy: { createdAt: 'desc' },
     })
-    const parsed = list.map((q: Question) => ({ ...q, options: safeParseOptions(q.options) }))
+    const parsed = list.map((q: any) => ({ ...q, options: safeParseOptions(q.options) }))
     return NextResponse.json(parsed, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('questions API error:', e)
