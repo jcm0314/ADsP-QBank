@@ -1,48 +1,52 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-export async function GET(request: Request) {
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const category = searchParams.get('category')
+    const { searchParams } = new URL(req.url)
+    const category = searchParams.get('category') ?? undefined
     const difficulty = searchParams.get('difficulty')
+    const difficultyNum = difficulty ? Number(difficulty) : undefined
 
-    const questions = await prisma.question.findMany({
+    const list = await prisma.question.findMany({
       where: {
-        ...(category && { category }),
-        ...(difficulty && { difficulty: parseInt(difficulty) }),
+        ...(category ? { category } : {}),
+        ...(difficultyNum !== undefined ? { difficulty: difficultyNum } : {}),
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     })
-
-    const parsedQuestions = questions.map(q => ({
-      ...q,
-      options: JSON.parse(q.options)
-    }))
-
-    return NextResponse.json(parsedQuestions)
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch questions' }, { status: 500 })
+    const parsed = list.map(q => ({ ...q, options: safeParseOptions(q.options) }))
+    return NextResponse.json(parsed, { headers: { 'Cache-Control': 'no-store' } })
+  } catch (e) {
+    console.error('questions API error:', e)
+    return NextResponse.json(
+      { error: 'Failed to fetch questions' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
+    )
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const body = await request.json()
-    const question = await prisma.question.create({
-      data: {
-        ...body,
-        options: JSON.stringify(body.options)
-      },
+    const body = await req.json()
+    const created = await prisma.question.create({
+      data: { ...body, options: JSON.stringify(body.options) },
     })
-
-    return NextResponse.json({
-      ...question,
-      options: JSON.parse(question.options)
-    }, { status: 201 })
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to create question' }, { status: 500 })
+    const parsed = { ...created, options: safeParseOptions(created.options) }
+    return NextResponse.json(parsed, { status: 201, headers: { 'Cache-Control': 'no-store' } })
+  } catch (e) {
+    console.error('create question API error:', e)
+    return NextResponse.json(
+      { error: 'Failed to create question' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
+    )
   }
+}
+
+function safeParseOptions(s: string) {
+  try { return JSON.parse(s) } catch { return [] }
 }

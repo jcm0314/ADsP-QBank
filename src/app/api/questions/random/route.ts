@@ -1,37 +1,40 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET() {
   try {
-    // 전체 문제 개수 조회
     const count = await prisma.question.count()
-    
     if (count === 0) {
-      return NextResponse.json({ error: 'No questions available' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'No questions available' },
+        { status: 404, headers: { 'Cache-Control': 'no-store' } }
+      )
     }
 
-    // 랜덤 인덱스 생성
     const skip = Math.floor(Math.random() * count)
-    
-    // 랜덤 문제 조회
-    const question = await prisma.question.findMany({
-      take: 1,
-      skip: skip,
-    })
-
-    if (!question[0]) {
-      return NextResponse.json({ error: 'Question not found' }, { status: 404 })
+    const [q] = await prisma.question.findMany({ take: 1, skip })
+    if (!q) {
+      return NextResponse.json(
+        { error: 'Question not found' },
+        { status: 404, headers: { 'Cache-Control': 'no-store' } }
+      )
     }
 
-    // options를 JSON 파싱
-    const parsedQuestion = {
-      ...question[0],
-      options: JSON.parse(question[0].options)
-    }
-
-    return NextResponse.json(parsedQuestion)
-  } catch (error) {
-    console.error('Failed to fetch random question:', error)
-    return NextResponse.json({ error: 'Failed to fetch question' }, { status: 500 })
+    const parsed = { ...q, options: safeParseOptions(q.options) }
+    return NextResponse.json(parsed, { headers: { 'Cache-Control': 'no-store' } })
+  } catch (e) {
+    console.error('random API error:', e)
+    return NextResponse.json(
+      { error: 'Failed to fetch question' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
+    )
   }
+}
+
+function safeParseOptions(s: string) {
+  try { return JSON.parse(s) } catch { return [] }
 }
