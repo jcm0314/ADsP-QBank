@@ -1555,6 +1555,16 @@ const questions = [
   }
 ]
 
+// Fisher-Yates 셔플 알고리즘을 사용하여 배열을 랜덤으로 섞는 함수
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
 async function main() {
   console.log('ADsP 시드 데이터 생성 시작...')
 
@@ -1565,16 +1575,25 @@ async function main() {
   // 100개 문제 생성
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i]
+    
+    // 보기 배열을 파싱
+    const originalOptions = JSON.parse(q.options)
+    const correctAnswer = originalOptions[q.answer]
+    
+    // 보기를 랜덤으로 섞음
+    const shuffledOptions = shuffleArray(originalOptions)
+    
+    // 섞인 배열에서 정답의 새로운 인덱스 찾기
+    const newAnswerIndex = shuffledOptions.indexOf(correctAnswer)
+    
     await prisma.question.create({
       data: {
-        // title에 별도 번호 부여 (필요시 사용, 현재는 원본 title 사용)
-        // title: `${q.title} [${i + 1}]`,
         title: q.title,
         content: q.content,
         category: q.category,
         difficulty: q.difficulty,
-        options: q.options,
-        answer: q.answer,
+        options: JSON.stringify(shuffledOptions), // 섞인 보기
+        answer: newAnswerIndex, // 업데이트된 정답 인덱스
         explanation: q.explanation
       }
     })
